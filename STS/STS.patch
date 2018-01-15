@@ -1,0 +1,219 @@
+diff -rupN STS/core/Dimacs.h new/core/Dimacs.h
+--- STS/core/Dimacs.h	2012-03-16 16:45:10.000000000 -0700
++++ new/core/Dimacs.h	2018-01-14 17:11:06.773179610 -0800
+@@ -21,11 +21,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR
+ #ifndef Minisat_Dimacs_h
+ #define Minisat_Dimacs_h
+ 
++#include <vector>
+ #include <stdio.h>
+ 
+ #include "utils/ParseUtils.h"
+ #include "core/SolverTypes.h"
+ 
++
++extern std::vector<int> indsup;
++
++
+ namespace Minisat {
+ 
+ //=================================================================================================
+@@ -113,9 +118,31 @@ static double * parse_weighted_DIMACS_ma
+ 		double wlit =parseDouble(in);
+ 		ret[varnum-1] = wlit;	
+ 		}
+-		else if (*in == 'c' || *in == 'p')
++		else if (*in == 'p')
+             skipLine(in);
+-        else{
++        else if (*in == 'c') {
++            bool is_ind = true;
++            char ind[] = " ind";
++            for (int index = 0; index < 4; ++ index) {
++                ++in;
++                if (*in != ind[index]) {
++                    is_ind = false;
++                    break;
++                }
++            }
++            if (!is_ind) {
++                skipLine(in);
++            } else {
++            ++in;
++            int parsed_lit;
++            while (true) {
++                parsed_lit = parseInt(in);
++                if (parsed_lit == 0)
++                    break;
++                indsup.push_back(parsed_lit);
++            }
++            }
++        }else{
+             cnt++;
+             readClause(in, S, lits);
+             S.addClause_(lits); }
+diff -rupN STS/core/Main.cc new/core/Main.cc
+--- STS/core/Main.cc	2012-03-22 17:43:28.000000000 -0700
++++ new/core/Main.cc	2018-01-14 17:11:50.402577438 -0800
+@@ -48,6 +48,12 @@ using namespace Minisat;
+ //=================================================================================================
+ 
+ 
++std::vector<int> indsup;
++
++double duration(struct timespec * a, struct timespec * b) {
++    return (b->tv_sec - a->tv_sec) + 1.0e-9 * (b->tv_nsec - a->tv_nsec);
++}
++
+ void printStats(Solver& solver)
+ {
+     double cpu_time = cpuTime();
+@@ -195,7 +201,8 @@ int main(int argc, char** argv)
+                 if (setrlimit(RLIMIT_AS, &rl) == -1)
+                     printf("WARNING! Could not set resource limit: Virtual memory.\n");
+             } }
+-        
++        struct timespec start;
++        clock_gettime(CLOCK_REALTIME, &start);
+         if (argc == 1)
+             printf("Reading from standard input... Use '--help' for help.\n");
+         
+@@ -275,12 +282,26 @@ int main(int argc, char** argv)
+ 		avg_multipliers.resize(var_num+1,0.0);
+ 				
+ 		std::vector <double > sampled_log_z;
+-		
+ 		std::vector <unsigned > var_ordering;		// variable ordering
+ 		// generate a random variable ordering
+ 		var_ordering.resize(var_num);
+ 		for (int hh =0;hh<var_num;hh++)
+ 			var_ordering[hh]=hh;
++                std::vector <bool> is_ind;
++                is_ind.resize(var_num);
++                for (int hh =0;hh<var_num;hh++)
++                        is_ind[hh]=0;
++                int cc = 0;
++		for (std::vector<int>::iterator x = indsup.begin(); x != indsup.end(); ++x) {
++                        is_ind[*x-1] = 1;
++                        var_ordering[cc] = *x-1;
++                        ++cc;
++                }
++                for (int hh =0;hh<var_num;hh++)
++                        if (is_ind[hh] == 0) {
++                                var_ordering[cc] = hh;
++                                ++cc;
++                        }
+ 		
+ 		int actual_number_of_samples = 0;
+ 		//bool random_variable_ordering = false;
+@@ -296,8 +317,8 @@ int main(int argc, char** argv)
+ 			printf("%f,",VarWeights[hh]);
+ 		}	
+ 		//shuffle(var_ordering, rng);			//!!!!!!!!!!!!
+-		//var_ordering[0]=100;
+-		//var_ordering[100]=0;
++		//var_ordering[0]=1;
++		//var_ordering[1]=0;
+ 		
+ 		
+ 		//int k = 200;
+@@ -332,6 +353,7 @@ int main(int argc, char** argv)
+ 			InputSamples.resize(1);
+ 			for (int level =0;level<S.nVars()+1;level++)
+ 				{				
++                                bool finalize = level == (int) indsup.size()+1;
+ 				OutputSamples.clear();
+ 				int prev_samp_num = (int) InputSamples.size();
+ 				
+@@ -344,6 +366,14 @@ int main(int argc, char** argv)
+ 				
+ 				if (verb>0)
+ 					printf("----------------- Level %d (%d)-----------------------------\n",level,prev_samp_num);
++                                struct timespec end;
++                                clock_gettime(CLOCK_REALTIME, &end);
++                                if (duration(&start, &end) > 3600.0) {
++                                        printf("timeout\n");
++                                        exit(0);
++                                }
++                                if (finalize)
++                                        printf("start\n");
+ 				for (int j=0;j<std::min(prev_samp_num,k);j++)
+ 				{
+ 					// sample s_j from Samples							
+@@ -363,16 +393,16 @@ int main(int argc, char** argv)
+ 								{
+ 								cur_model[i] = mkLit(var_ordering[i],InputSamples[l][var_ordering[i]]);
+ 								if (verb>1)
+-									printf("x_%d = %d\n",var_ordering[i]+1,!toInt(InputSamples[l][var_ordering[i]]));
++									printf("x_%d = %d\n",var_ordering[i]+1,toInt(InputSamples[l][var_ordering[i]]));
+ 								}
+ 								else
+ 								{
+ 								cur_model[i] = mkLit(var_ordering[i],!InputSamples[l][var_ordering[i]]);
+-								if (verb>1)
+-									printf("x_%d = %d\n",var_ordering[i]+1,toInt(InputSamples[l][var_ordering[i]]));
++								if (finalize)
++									printf("%d",toInt(InputSamples[l][var_ordering[i]]));
+ 								}								
+ 								}
+-						if (verb>1)
++						if (finalize)
+ 							printf("\n");
+ 						OutputSamples.push_back(InputSamples[l]);
+ 						InputSamples.erase(InputSamples.begin()+l);		// sampling without replacement
+@@ -395,6 +425,10 @@ int main(int argc, char** argv)
+ 
+ 					}				
+ 				}
++                                if (finalize) {
++                                        printf("end\n");
++                                        break;
++                                }
+ 				if (weighted_problem)
+ 					{
+ 					double AvgDelta = 0.0;
+@@ -424,6 +458,7 @@ int main(int argc, char** argv)
+ 				//AllSamples.push_back(InputSamples);
+ 				InputSamples = OutputSamples;
+ 				}
++                        continue;
+ 			
+ 			actual_number_of_samples = actual_number_of_samples +OutputSamples.size();
+ 			// output the samples
+@@ -439,17 +474,8 @@ int main(int argc, char** argv)
+ 						std::stringstream sss;//create a stringstream
+ 						sss << toInt(OutputSamples[l][i]);//add number to the stream
+ 						bit_representation = bit_representation +sss.str();
+-						if (i!=var_num-1)
+-							{
+-							if (verb>0)						
+-							printf("%d,",toInt(OutputSamples[l][i]));							
+-							}
+-						else
+-							{
+-							if (verb>0)						
+-							printf("%d\n",toInt(OutputSamples[l][i]));							
+-							}
+ 					}						
++                                printf("%s\n", bit_representation.c_str());
+ 				counts[bit_representation] = counts[bit_representation]+1;
+ 				}
+ 			}	
+@@ -495,7 +521,7 @@ int main(int argc, char** argv)
+ 			fflush (stdout);
+         }
+ 		}
+-		
++		exit(0);
+ 		
+ 		
+ 		double chi = 0.0;
+@@ -507,7 +533,7 @@ int main(int argc, char** argv)
+ 			printf("%d\n",(*it).second);
+ 			chi = chi + pow(o-e,2)/e;
+ 			}
+-		printf("Different : %d\n",counts.size());
++		printf("Different : %lu\n",counts.size());
+ 		printf("Chi-square : %f\n",chi);
+ 		
+ 		double log_z_hat = logsumexp(sampled_log_z)-log(nsamples);
