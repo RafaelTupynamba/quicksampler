@@ -1,6 +1,6 @@
 diff -rupN STS/core/Dimacs.h new/core/Dimacs.h
 --- STS/core/Dimacs.h	2012-03-16 16:45:10.000000000 -0700
-+++ new/core/Dimacs.h	2018-01-14 17:11:06.773179610 -0800
++++ new/core/Dimacs.h	2018-01-15 18:50:58.696436375 -0800
 @@ -21,11 +21,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR
  #ifndef Minisat_Dimacs_h
  #define Minisat_Dimacs_h
@@ -54,7 +54,7 @@ diff -rupN STS/core/Dimacs.h new/core/Dimacs.h
              S.addClause_(lits); }
 diff -rupN STS/core/Main.cc new/core/Main.cc
 --- STS/core/Main.cc	2012-03-22 17:43:28.000000000 -0700
-+++ new/core/Main.cc	2018-01-14 17:11:50.402577438 -0800
++++ new/core/Main.cc	2018-01-15 18:51:13.624337473 -0800
 @@ -48,6 +48,12 @@ using namespace Minisat;
  //=================================================================================================
  
@@ -125,22 +125,25 @@ diff -rupN STS/core/Main.cc new/core/Main.cc
  				OutputSamples.clear();
  				int prev_samp_num = (int) InputSamples.size();
  				
-@@ -344,6 +366,14 @@ int main(int argc, char** argv)
+@@ -344,6 +366,17 @@ int main(int argc, char** argv)
  				
  				if (verb>0)
  					printf("----------------- Level %d (%d)-----------------------------\n",level,prev_samp_num);
 +                                struct timespec end;
 +                                clock_gettime(CLOCK_REALTIME, &end);
-+                                if (duration(&start, &end) > 3600.0) {
++                                double dur = duration(&start, &end);
++                                if (dur > 3600.0) {
 +                                        printf("timeout\n");
 +                                        exit(0);
 +                                }
-+                                if (finalize)
++                                if (finalize) {
++                                        printf("Time %f\n", dur);
 +                                        printf("start\n");
++                                }
  				for (int j=0;j<std::min(prev_samp_num,k);j++)
  				{
  					// sample s_j from Samples							
-@@ -363,16 +393,16 @@ int main(int argc, char** argv)
+@@ -363,16 +396,16 @@ int main(int argc, char** argv)
  								{
  								cur_model[i] = mkLit(var_ordering[i],InputSamples[l][var_ordering[i]]);
  								if (verb>1)
@@ -161,7 +164,7 @@ diff -rupN STS/core/Main.cc new/core/Main.cc
  							printf("\n");
  						OutputSamples.push_back(InputSamples[l]);
  						InputSamples.erase(InputSamples.begin()+l);		// sampling without replacement
-@@ -395,6 +425,10 @@ int main(int argc, char** argv)
+@@ -395,6 +428,10 @@ int main(int argc, char** argv)
  
  					}				
  				}
@@ -172,7 +175,7 @@ diff -rupN STS/core/Main.cc new/core/Main.cc
  				if (weighted_problem)
  					{
  					double AvgDelta = 0.0;
-@@ -424,6 +458,7 @@ int main(int argc, char** argv)
+@@ -424,6 +461,7 @@ int main(int argc, char** argv)
  				//AllSamples.push_back(InputSamples);
  				InputSamples = OutputSamples;
  				}
@@ -180,7 +183,7 @@ diff -rupN STS/core/Main.cc new/core/Main.cc
  			
  			actual_number_of_samples = actual_number_of_samples +OutputSamples.size();
  			// output the samples
-@@ -439,17 +474,8 @@ int main(int argc, char** argv)
+@@ -439,17 +477,8 @@ int main(int argc, char** argv)
  						std::stringstream sss;//create a stringstream
  						sss << toInt(OutputSamples[l][i]);//add number to the stream
  						bit_representation = bit_representation +sss.str();
@@ -199,7 +202,7 @@ diff -rupN STS/core/Main.cc new/core/Main.cc
  				counts[bit_representation] = counts[bit_representation]+1;
  				}
  			}	
-@@ -495,7 +521,7 @@ int main(int argc, char** argv)
+@@ -495,7 +524,7 @@ int main(int argc, char** argv)
  			fflush (stdout);
          }
  		}
@@ -208,7 +211,7 @@ diff -rupN STS/core/Main.cc new/core/Main.cc
  		
  		
  		double chi = 0.0;
-@@ -507,7 +533,7 @@ int main(int argc, char** argv)
+@@ -507,7 +536,7 @@ int main(int argc, char** argv)
  			printf("%d\n",(*it).second);
  			chi = chi + pow(o-e,2)/e;
  			}
