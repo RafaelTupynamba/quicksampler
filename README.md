@@ -1,6 +1,8 @@
 # QuickSampler
 Efficient Sampling of SAT Solutions for Testing
 
+[Paper](https://people.eecs.berkeley.edu/~rtd/papers/quicksampler.pdf)
+
 # Building
 
 Install dependencies
@@ -67,7 +69,7 @@ For comparison with UniGen2, the source code can be obtained from `https://bitbu
 
 # Paper
 
-ICSE 2018 paper
+[ICSE 2018 paper](https://people.eecs.berkeley.edu/~rtd/papers/quicksampler.pdf)
 
 Efficient Sampling of SAT Solutions for Testing
 
