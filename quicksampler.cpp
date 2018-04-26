@@ -1,3 +1,4 @@
+#include <string.h>
 #include <z3++.h>
 #include <vector>
 #include <map>
@@ -10,6 +11,8 @@ class QuickSampler {
 
     struct timespec start_time;
     double solver_time = 0.0;
+    int max_samples;
+    double max_time;
 
     z3::context c;
     z3::optimize opt;
@@ -23,7 +26,7 @@ class QuickSampler {
     std::ofstream results_file;
 
 public:
-    QuickSampler(std::string input) : opt(c), input_file(input) {}
+    QuickSampler(std::string input, int max_samples, double max_time) : opt(c), input_file(input), max_samples(max_samples), max_time(max_time) {}
 
     void run() {
         clock_gettime(CLOCK_REALTIME, &start_time);
@@ -67,6 +70,9 @@ public:
             std::cout << "Error opening input file\n";
             abort();
         }
+        std::unordered_set<int> indset;
+        bool has_ind = false;
+        int max_var = 0;
         std::string line;
         while (getline(f, line)) {
             std::istringstream iss(line);
@@ -77,8 +83,11 @@ public:
                 int v;
                 while (!iss.eof()) {
                     iss >> v;
-                    if (v)
+                    if (v && indset.find(v) == indset.end()) {
+                        indset.insert(v);
                         ind.push_back(v);
+                        has_ind = true;
+                    }
                 }
             } else if (line[0] != 'c' && line[0] != 'p') {
                 z3::expr_vector clause(c);
@@ -89,11 +98,23 @@ public:
                         clause.push_back(literal(v));
                     else if (v < 0)
                         clause.push_back(!literal(-v));
+                    v = abs(v);
+                    if (!has_ind && v != 0)
+                        indset.insert(v);
+                    if (v > max_var)
+                        max_var = v;
                 }
                 exp.push_back(mk_or(clause));
             }
         }
         f.close();
+        if (!has_ind) {
+            for (int lit = 0; lit <= max_var; ++lit) {
+                if (indset.find(lit) != indset.end()) {
+                    ind.push_back(lit);
+                }
+            }
+        }
         z3::expr formula = mk_and(exp);
         opt.add(formula);
     }
@@ -182,11 +203,11 @@ public:
         struct timespec start;
         clock_gettime(CLOCK_REALTIME, &start);
         double elapsed = duration(&start_time, &start);
-        if (elapsed > 2 * 3600) {
+        if (elapsed > max_time) {
             std::cout << "Stopping: timeout\n";
             finish();
         }
-        if (samples >= 10000000) {
+        if (samples >= max_samples) {
             std::cout << "Stopping: samples\n";
             finish();
         }
@@ -226,11 +247,28 @@ public:
 };
 
 int main(int argc, char * argv[]) {
+    int max_samples = 10000000;
+    double max_time = 7200.0;
     if (argc < 2) {
         std::cout << "Argument required: input file\n";
         abort();
     }
-    QuickSampler s(argv[1]);
+    bool arg_samples = false;
+    bool arg_time = false;
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "-n") == 0)
+            arg_samples = true;
+        else if (strcmp(argv[i], "-t") == 0)
+            arg_time = true;
+        else if (arg_samples) {
+            arg_samples = false;
+            max_samples = atoi(argv[i]);
+        } else if (arg_time) {
+            arg_time = false;
+            max_time = atof(argv[i]);
+        }
+    }
+    QuickSampler s(argv[argc-1], max_samples, max_time);
     s.run();
     return 0;
 }
