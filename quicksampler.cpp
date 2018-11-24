@@ -41,8 +41,10 @@ public:
                 else
                     opt.add(!literal(v), 1);
             }
-            if (!solve())
-                break;
+            if (!solve()) {
+                std::cout << "Could not find a solution!\n";
+		exit(0);
+	    }
             z3::model m = opt.get_model();
             opt.pop();
 
@@ -104,7 +106,8 @@ public:
                     if (v > max_var)
                         max_var = v;
                 }
-                exp.push_back(mk_or(clause));
+                if (clause.size() > 0)
+		    exp.push_back(mk_or(clause));
             }
         }
         f.close();

@@ -3,6 +3,11 @@ Efficient Sampling of SAT Solutions for Testing
 
 [Paper](https://people.eecs.berkeley.edu/~rtd/papers/quicksampler.pdf)
 
+# Update
+
+Please check out our most recent work [SMTSampler](https://github.com/RafaelTupynamba/SMTSampler).
+SMTSampler brings some important improvements over QuickSampler and also allows sampling from SMT formulas with bit-vectors and arrays.
+
 # Building
 
 Install dependencies
