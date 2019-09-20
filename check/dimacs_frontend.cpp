@@ -32,6 +32,8 @@ struct cell {
     bool v;
 };
 
+params_ref p;
+reslimit limit;
 extern std::vector<int> indsup;
 std::unordered_map<std::string, struct cell> hist;
 double solver_time = 0.0;
@@ -180,7 +182,8 @@ bool check_sample(sat::solver & solver, std::string & line) {
         struct timespec start;
         clock_gettime(CLOCK_REALTIME, &start);
 
-        solver.user_push();
+        sat::solver newsolver(p, limit);
+        newsolver.copy(solver);
         std::istringstream in(line);
         int nmut;
         in >> nmut;
@@ -199,12 +202,12 @@ bool check_sample(sat::solver & solver, std::string & line) {
             printf("#%c,%d#", c, c);
             abort();
           }
-          solver.mk_clause(lits.size(), lits.c_ptr());
+          newsolver.mk_clause(lits.size(), lits.c_ptr());
 
           in >> c;
           ++k;
         }
-        lbool r = solver.check();
+        lbool r = newsolver.check();
         bool result = false;
         switch (r) {
           case l_true:
@@ -217,7 +220,6 @@ bool check_sample(sat::solver & solver, std::string & line) {
             break;
         }
 
-        solver.user_pop(1);
         struct timespec end;
         clock_gettime(CLOCK_REALTIME, &end);
         solver_time += duration(&start, &end);
@@ -239,6 +241,8 @@ void quicksampler_check(char const * file_name, sat::solver & solver, double tim
 
     int count = 0;
     int steps = 0;
+    p = gparams::get_module("sat");
+    p.set_bool("produce_models", true);
     for (std::string line; std::getline(ifs, line); ) {
         ++count;
         check_sample(solver, line);
